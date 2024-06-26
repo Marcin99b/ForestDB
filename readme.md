@@ -2,6 +2,8 @@
 
 Unofficial analysis platform for forests in Poland.
 
+![There should be logo...](logo.png)
+
 ## Roadmap
 
 - [x] Downloader for historical animal count in regions
