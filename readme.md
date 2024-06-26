@@ -2,7 +2,9 @@
 
 Unofficial analysis platform for forests in Poland.
 
-![There should be logo...](<https://raw.githubusercontent.com/Marcin99b/ForestDB/main/logo.png> | width=100)
+![There should be logo...](https://raw.githubusercontent.com/Marcin99b/ForestDB/main/logo.png | width=100)
+
+<img src="https://raw.githubusercontent.com/Marcin99b/ForestDB/main/logo.png" width="200" height="200">
 
 ## Roadmap
 
