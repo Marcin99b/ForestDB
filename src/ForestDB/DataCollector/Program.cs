@@ -1,8 +1,14 @@
-﻿using System.Text;
+﻿using Serilog;
+using Serilog.Formatting.Compact;
+
+Log.Logger = new LoggerConfiguration()
+    .WriteTo.Console()
+    .CreateLogger();
 
 var httpClient = new HttpClient();
 var downloader = new HuntReportDownloader(httpClient);
-var worker = new DownloadWorker(downloader, 500);
+var eventLogger = new EventLogger();
+var worker = new DownloadWorker(downloader, 500, eventLogger);
 
 var tokenSource = new CancellationTokenSource();
 worker.Run(tokenSource.Token);
@@ -35,9 +41,10 @@ public class DownloadWorker
     private readonly string resultsPath = "/Results/";
     private readonly HuntReportDownloader downloader;
     private readonly int waitMiliseconds;
+    private readonly EventLogger eventLogger;
     private int currentId;
 
-    public DownloadWorker(HuntReportDownloader downloader, int waitMiliseconds)
+    public DownloadWorker(HuntReportDownloader downloader, int waitMiliseconds, EventLogger eventLogger)
     {
         if (File.Exists(this.savepointPath))
         {
@@ -53,6 +60,7 @@ public class DownloadWorker
 
         this.downloader = downloader;
         this.waitMiliseconds = waitMiliseconds;
+        this.eventLogger = eventLogger;
     }
 
     public void Run(CancellationToken token)
@@ -66,6 +74,8 @@ public class DownloadWorker
                 using var writer = new BinaryWriter(File.Create(savePath));
                 var bytes = result.Data.AsSpan();
                 writer.Write(bytes);
+
+                this.eventLogger.HuntReportDownloaded(result.Id, bytes.Length);
             }
 
             this.currentId++;
@@ -76,3 +86,11 @@ public class DownloadWorker
 }
 
 public record HuntReportDownloaderResult(int Id, byte[] Data);
+
+public class EventLogger
+{
+    public void HuntReportDownloaded(int id, int dataLength)
+    {
+        Log.Information("EventName: {EventName} Id: {Id} DataLength: {DataLength}", nameof(HuntReportDownloaded), id, dataLength);
+    }
+}
