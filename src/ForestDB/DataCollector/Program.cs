@@ -7,7 +7,7 @@ Log.Logger = new LoggerConfiguration()
 var httpClient = new HttpClient();
 var downloader = new HuntReportDownloader(httpClient);
 var eventLogger = new EventLogger();
-var worker = new DownloadWorker(downloader, 1000, eventLogger, 100, 4);
+var worker = new DownloadWorker(downloader, 2000, eventLogger, 1000, 16);
 
 var tokenSource = new CancellationTokenSource();
 worker.Run(tokenSource.Token);
@@ -72,6 +72,14 @@ public class DownloadWorker
         {
             var currentBatch = new List<HuntReportDownloaderResult>();
             var lastId = this.batchSize + this.currentId;
+            if (this.downloader.DownloadId(this.currentId) == null && this.downloader.DownloadId(lastId) == null)
+            {
+                this.eventLogger.BatchSkipped(this.currentId, lastId);
+                this.currentId = lastId;
+                continue;
+            }
+
+            this.eventLogger.BatchDownloadingStarted(this.currentId, lastId);
             var parallel = Parallel.For(this.currentId, lastId, new ParallelOptions() { CancellationToken = token, MaxDegreeOfParallelism = this.workers }, i =>
             {
                 var result = this.downloader.DownloadId(i);
@@ -113,4 +121,7 @@ public class EventLogger
     public void BatchSavingStarted() => Log.Information("EventName: {EventName}", nameof(BatchSavingStarted));
 
     public void BatchSavingFinished() => Log.Information("EventName: {EventName}", nameof(BatchSavingFinished));
+
+    public void BatchSkipped(int fromId, int toId) => Log.Information("EventName: {EventName} FromId: {FromId} ToId: {ToId}", nameof(BatchSkipped), fromId, toId);
+    public void BatchDownloadingStarted(int fromId, int toId) => Log.Information("EventName: {EventName} FromId: {FromId} ToId: {ToId}", nameof(BatchDownloadingStarted), fromId, toId);
 }
