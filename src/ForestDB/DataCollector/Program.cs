@@ -51,7 +51,7 @@ public class DownloadWorker
         {
             if (int.TryParse(File.ReadAllText(this.savepointPath), out var result))
             {
-                this.currentId = result;
+                this.currentId = result - batchSize;
             }
         }
         else
