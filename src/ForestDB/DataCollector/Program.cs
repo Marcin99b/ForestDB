@@ -1,5 +1,4 @@
 ﻿using Serilog;
-using Serilog.Formatting.Compact;
 
 Log.Logger = new LoggerConfiguration()
     .WriteTo.Console()
@@ -8,7 +7,7 @@ Log.Logger = new LoggerConfiguration()
 var httpClient = new HttpClient();
 var downloader = new HuntReportDownloader(httpClient);
 var eventLogger = new EventLogger();
-var worker = new DownloadWorker(downloader, 500, eventLogger);
+var worker = new DownloadWorker(downloader, 1000, eventLogger, 100, 4);
 
 var tokenSource = new CancellationTokenSource();
 worker.Run(tokenSource.Token);
@@ -42,9 +41,11 @@ public class DownloadWorker
     private readonly HuntReportDownloader downloader;
     private readonly int waitMiliseconds;
     private readonly EventLogger eventLogger;
+    private readonly int batchSize;
+    private readonly int workers;
     private int currentId;
 
-    public DownloadWorker(HuntReportDownloader downloader, int waitMiliseconds, EventLogger eventLogger)
+    public DownloadWorker(HuntReportDownloader downloader, int waitMiliseconds, EventLogger eventLogger, int batchSize, int workers)
     {
         if (File.Exists(this.savepointPath))
         {
@@ -61,25 +62,41 @@ public class DownloadWorker
         this.downloader = downloader;
         this.waitMiliseconds = waitMiliseconds;
         this.eventLogger = eventLogger;
+        this.batchSize = batchSize;
+        this.workers = workers;
     }
 
     public void Run(CancellationToken token)
     {
         while (!token.IsCancellationRequested)
         {
-            var result = this.downloader.DownloadId(this.currentId);
-            if (result != null)
+            var currentBatch = new List<HuntReportDownloaderResult>();
+            var lastId = this.batchSize + this.currentId;
+            var parallel = Parallel.For(this.currentId, lastId, new ParallelOptions() { CancellationToken = token, MaxDegreeOfParallelism = this.workers }, i =>
             {
-                var savePath = Path.Combine(this.resultsPath, this.currentId.ToString() + ".json");
+                var result = this.downloader.DownloadId(i);
+                if (result != null)
+                {
+                    currentBatch.Add(result);
+                    this.eventLogger.HuntReportDownloaded(result.Id, result.Data.Length);
+                }
+            });
+
+            this.eventLogger.BatchSavingStarted();
+            foreach (var item in currentBatch)
+            {
+                var savePath = Path.Combine(this.resultsPath, item.Id.ToString() + ".json");
                 using var writer = new BinaryWriter(File.Create(savePath));
-                var bytes = result.Data.AsSpan();
+                var bytes = item.Data.AsSpan();
                 writer.Write(bytes);
-
-                this.eventLogger.HuntReportDownloaded(result.Id, bytes.Length);
             }
+            this.eventLogger.BatchSavingFinished();
 
-            this.currentId++;
-            File.WriteAllText(this.savepointPath, this.currentId.ToString());
+            File.WriteAllText(this.savepointPath, lastId.ToString());
+
+            this.eventLogger.BatchSaved(this.currentId, lastId, currentBatch.Count());
+            this.currentId = lastId;
+
             Thread.Sleep(this.waitMiliseconds);
         }
     }
@@ -89,8 +106,11 @@ public record HuntReportDownloaderResult(int Id, byte[] Data);
 
 public class EventLogger
 {
-    public void HuntReportDownloaded(int id, int dataLength)
-    {
-        Log.Information("EventName: {EventName} Id: {Id} DataLength: {DataLength}", nameof(HuntReportDownloaded), id, dataLength);
-    }
+    public void HuntReportDownloaded(int id, int dataLength) => Log.Information("EventName: {EventName} Id: {Id} DataLength: {DataLength}", nameof(HuntReportDownloaded), id, dataLength);
+
+    public void BatchSaved(int fromId, int toId, int items) => Log.Information("EventName: {EventName} FromId: {FromId} ToId: {ToId} Items: {Items}", nameof(BatchSaved), fromId, toId, items);
+
+    public void BatchSavingStarted() => Log.Information("EventName: {EventName}", nameof(BatchSavingStarted));
+
+    public void BatchSavingFinished() => Log.Information("EventName: {EventName}", nameof(BatchSavingFinished));
 }
