@@ -1,23 +1,26 @@
 ﻿using Newtonsoft.Json;
 using Newtonsoft.Json.Bson;
 
-var items = GetAllItems().ToArray();
+//var items = GetAllItems().ToArray();
 
-var serialized = JsonConvert.SerializeObject(new Rootobject() { huntingData = items });
+//var serialized = JsonConvert.SerializeObject(new Rootobject() { huntingData = items });
 
 var fullPath = "C:/Results/full.data";
-using var bsonFile = File.Create(fullPath);
-var bsonWriter = new BsonDataWriter(bsonFile);
+//using var bsonFile = File.Create(fullPath);
+//var bsonWriter = new BsonDataWriter(bsonFile);
 
-var textReader = new StringReader(serialized);
-var jsonReader = new JsonTextReader(textReader);
-bsonWriter.WriteToken(jsonReader);
+//var textReader = new StringReader(serialized);
+//var jsonReader = new JsonTextReader(textReader);
+//bsonWriter.WriteToken(jsonReader);
 
 var fs = File.Open(fullPath, FileMode.Open);
 var reader = new BsonDataReader(fs);
 
 var serializer = new JsonSerializer();
-var items2 = serializer.Deserialize<Rootobject>(reader);
+var items = serializer.Deserialize<Rootobject>(reader)!.huntingData;
+
+var groupedByRegion = items.GroupBy(x => x.hunt_dist_nr).ToArray();
+
 
 Console.ReadKey();
 
