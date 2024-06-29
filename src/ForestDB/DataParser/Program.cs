@@ -1,15 +1,38 @@
 ﻿using Newtonsoft.Json;
+using Newtonsoft.Json.Bson;
 
-var items = GetAllItems();
-Console.WriteLine(items.Count());
+var items = GetAllItems().ToArray();
+
+var serialized = JsonConvert.SerializeObject(new Rootobject() { huntingData = items });
+
+var fullPath = "C:/Results/full.data";
+using var bsonFile = File.Create(fullPath);
+var bsonWriter = new BsonDataWriter(bsonFile);
+
+var textReader = new StringReader(serialized);
+var jsonReader = new JsonTextReader(textReader);
+bsonWriter.WriteToken(jsonReader);
+
+var fs = File.Open(fullPath, FileMode.Open);
+var reader = new BsonDataReader(fs);
+
+var serializer = new JsonSerializer();
+var items2 = serializer.Deserialize<Rootobject>(reader);
+
 Console.ReadKey();
 
 IEnumerable<Huntingdata> GetAllItems()
 {
-    foreach (var item in Directory.GetFiles("C:/Results"))
+    var files = Directory.GetFiles("C:/Results").Where(x => x.EndsWith(".json")).ToArray();
+
+    var count = 0;
+    var fullCount = files.Length;
+    foreach (var item in files)
     {
         var content = File.ReadAllText(item);
-        var huntingData = JsonConvert.DeserializeObject<Rootobject>(content).huntingData;
+        var huntingData = JsonConvert.DeserializeObject<Rootobject>(content)!.huntingData;
+        Console.SetCursorPosition(0, 0);
+        Console.Write($"{++count}/{fullCount} ({count * 100 / fullCount}%)");
         foreach (var huntingItem in huntingData)
         {
             yield return huntingItem;
